@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Football Rush</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif;background:#07502b}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+#menu,#end{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(#09243b,#07552f);color:#fff}
+#end{display:none;background:#0009}.card{background:#10251eeF;padding:25px;border-radius:22px}
+h1{font-size:44px;margin:0 0 10px}button{border:0;border-radius:15px;padding:14px 25px;margin:7px;font-size:19px;font-weight:bold;background:#35c759;color:white}
+#hud{position:fixed;z-index:3;top:12px;left:12px;right:12px;display:none;justify-content:space-between;color:#fff;font-weight:bold;text-shadow:0 2px 3px #000}
+#controls{position:fixed;z-index:4;left:0;right:0;bottom:18px;display:none;justify-content:center;align-items:center;gap:24px}.dpad{display:flex;gap:10px;align-items:center}#controls button{width:78px;height:78px;border-radius:50%;margin:0;padding:0;font-size:27px;background:#eee;color:#111;box-shadow:0 5px 0 #aaa}#controls #shoot{width:100px;height:100px;border-radius:50%;background:#ffc21c;color:#111;font-size:16px;box-shadow:0 5px 0 #b77f00}
+</style>
+</head>
+<body>
+<div id="loading"><div class="loadCard"><div class="ball">⚽</div><h1>FOOTBALL RUSH</h1><p>GET READY TO SCORE!</p><div class="bar"><i id="loadBar"></i></div><small>Loading stadium...</small></div></div>
+<div id="menu"><h1>⚽ FOOTBALL RUSH</h1><p>Drag your player, collect coins and score!</p><p>🪙 Coins: <b id="menuCoins">0</b></p><button id="play">PLAY LEVEL 1</button>
+<button id="skinsBtn">👕 SKINS</button>
+<div id="skinsPanel"><h2>👕 PLAYER SKINS</h2><p>🪙 Coins: <b id="shopCoins">0</b></p>
+<button class="skin" data-skin="blue">🔵 Blue — FREE</button>
+<button class="skin" data-skin="red">🔴 Red — 5 🪙</button>
+<button class="skin" data-skin="green">🟢 Green — 10 🪙</button>
+<button class="skin" data-skin="gold">🟡 Gold — 20 🪙</button>
+<br><button id="closeSkins">CLOSE</button></div>
+</div>
+<div id="hud"><span>⚽ <b id="score">0</b>/3</span><span>🪙 <b id="coins">0</b></span><span>🏆 Level 1</span></div>
+<div id="controls"><div class="dpad"><button id="left">⬅️</button><button id="forward">⬆️</button><button id="right">➡️</button></div><button id="shoot">SHOOT</button></div>
+<div id="end"><div class="card"><h2 id="endTitle"></h2><p id="endText"></p><button id="again">PLAY AGAIN</button><button id="home">MENU</button></div></div>
+<canvas id="game"></canvas>
+<script>
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+let W=innerWidth,H=innerHeight,dpr=1,playing=false,dragging=false,score=0;
+let coins=Number(localStorage.getItem("fr_coins")||0),player,ball,defenders,items;
+let skin=localStorage.getItem("fr_skin")||"blue";
+const prices={blue:0,red:5,green:10,gold:20};
+const skinColors={blue:"#2474e8",red:"#e54848",green:"#19a85a",gold:"#f3c51b"};
+function finishLoading(){document.getElementById("loading").style.display="none"}
+let lp=0;const lt=setInterval(()=>{lp+=8;document.getElementById("loadBar").style.width=lp+"%";if(lp>=100){clearInterval(lt);setTimeout(finishLoading,250)}},70);
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener("resize",resize);resize();
+function ui(){menuCoins.textContent=coins;document.getElementById("coins").textContent=coins}
+ui();
+function start(){
+ menu.style.display="none";end.style.display="none";hud.style.display="flex";controls.style.display="flex";
+ score=0;document.getElementById("score").textContent=0;
+ player={x:W/2,y:H-110};ball={x:W/2,y:H-145,vx:0,vy:0};
+ defenders=[{x:W*.3,y:H*.45,v:1.8},{x:W*.7,y:H*.3,v:-1.5}];
+ items=[];for(let i=0;i<8;i++)items.push({x:60+((i*97)%(Math.max(80,W-120))),y:150+i*65,got:false});
+ playing=true;requestAnimationFrame(loop);
+}
+function stop(msg,win){playing=false;controls.style.display="none";end.style.display="flex";endTitle.textContent=win?"🏆 YOU WIN!":"💥 GAME OVER";endText.textContent=msg}
+function draw(){
+ ctx.fillStyle="#158044";ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle="#fff";ctx.lineWidth=3;ctx.strokeRect(15,15,W-30,H-30);
+ ctx.beginPath();ctx.moveTo(15,H/2);ctx.lineTo(W-15,H/2);ctx.stroke();
+ const gw=210;ctx.fillStyle="#fff";ctx.fillRect(W/2-gw/2,65,gw,8);
+ for(const q of items)if(!q.got){ctx.fillStyle="#ffd21f";ctx.beginPath();ctx.arc(q.x,q.y,11,0,Math.PI*2);ctx.fill();ctx.fillStyle="#9b6500";ctx.font="bold 10px Arial";ctx.textAlign="center";ctx.fillText("1",q.x,q.y+4)}
+ for(const d of defenders){ctx.fillStyle="#e54848";ctx.beginPath();ctx.arc(d.x,d.y,23,0,Math.PI*2);ctx.fill();ctx.fillStyle="#ffd0a8";ctx.beginPath();ctx.arc(d.x,d.y-12,9,0,Math.PI*2);ctx.fill()}
+ ctx.fillStyle=skinColors[skin]||skinColors.blue;ctx.beginPath();ctx.arc(player.x,player.y,23,0,Math.PI*2);ctx.fill();ctx.fillStyle="#ffd0a8";ctx.beginPath();ctx.arc(player.x,player.y-13,9,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="#fff";ctx.font="bold 13px Arial";ctx.textAlign="center";ctx.fillText("10",player.x,player.y+6);
+ ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(ball.x,ball.y,9,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="#111";ctx.font="bold 11px Arial";ctx.fillText("⚽",ball.x,ball.y+4);
+}
+function loop(){
+ if(!playing)return;
+ for(const d of defenders){d.x+=d.v;if(d.x<35||d.x>W-35)d.v*=-1}
+ if(Math.abs(ball.vy)>0.1){ball.x+=ball.vx;ball.y+=ball.vy;ball.vy*=.985;ball.vx*=.985}else{ball.x=player.x;ball.y=player.y-34}
+ for(const q of items)if(!q.got&&Math.hypot(q.x-player.x,q.y-player.y)<34){q.got=true;coins++;localStorage.setItem("fr_coins",coins);ui()}
+ for(const d of defenders)if(Math.hypot(d.x-player.x,d.y-player.y)<42){stop("A defender got you!",false);return}
+ if(ball.y<82&&Math.abs(ball.x-W/2)<105){score++;document.getElementById("score").textContent=score;ball.vy=0;if(score>=3){stop("You scored 3 goals!",true);return}}
+ draw();requestAnimationFrame(loop)
+}
+
+let moveTimer=null;
+function moveLeft(){if(playing)player.x=Math.max(30,player.x-28)}
+function moveRight(){if(playing)player.x=Math.min(W-30,player.x+28)}
+function moveForward(){if(playing){player.y=Math.max(H*.45,player.y-28);if(Math.abs(ball.vy)<.1){ball.x=player.x;ball.y=player.y-34}}}
+left.onpointerdown=()=>{moveLeft();moveTimer=setInterval(moveLeft,70)}
+right.onpointerdown=()=>{moveRight();moveTimer=setInterval(moveRight,70)}
+left.onpointerup=left.onpointercancel=()=>clearInterval(moveTimer)
+right.onpointerup=right.onpointercancel=()=>clearInterval(moveTimer)
+forward.onpointerdown=()=>{moveForward();moveTimer=setInterval(moveForward,70)}
+forward.onpointerup=forward.onpointercancel=()=>clearInterval(moveTimer)
+function shootBall(){if(!playing)return;ball.x=player.x;ball.y=player.y-34;ball.vy=-10;ball.vx=(W/2-player.x)*.035}
+skinsBtn.onclick=()=>{skinsPanel.style.display="block";shopCoins.textContent=coins};
+closeSkins.onclick=()=>skinsPanel.style.display="none";
+document.querySelectorAll(".skin").forEach(btn=>btn.onclick=()=>{
+ const s=btn.dataset.skin,price=prices[s];
+ if(skin===s){skinsPanel.style.display="none";return}
+ if(price===0||coins>=price){coins-=price;localStorage.setItem("fr_coins",coins);skin=s;localStorage.setItem("fr_skin",skin);ui();skinsPanel.style.display="none"}
+ else alert("You need "+(price-coins)+" more coins!");
+});
+play.onclick=start;shoot.onclick=shootBall;again.onclick=start;home.onclick=()=>{playing=false;end.style.display="none";hud.style.display="none";controls.style.display="none";menu.style.display="flex";ui()};
+</script>
+</body>
+</html>
